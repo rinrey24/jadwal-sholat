@@ -8,12 +8,10 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 
-// expo-av requires a native module that is NOT included in Expo Go.
-// We detect Expo Go at module load time and skip the require entirely,
-// which prevents Metro's guardedLoadModule from logging the error even
-// when the call is wrapped in try/catch.
+// expo-audio requires a native module that is NOT included in Expo Go.
+// We detect Expo Go at module load time and skip the require entirely.
 const AUDIO_SUPPORTED = Constants.executionEnvironment === 'bare';
-type SoundObj = { playAsync(): Promise<any>; pauseAsync(): Promise<any>; unloadAsync(): Promise<any>; setOnPlaybackStatusUpdate(cb: (s: any) => void): void };
+type SoundObj = { play(): void; pause(): void; remove(): void; addListener(event: string, cb: (s: any) => void): { remove(): void } };
 
 import { Colors, Radius, Shadow } from '../constants/theme';
 import Ornament from '../components/ui/Ornament';
@@ -40,7 +38,7 @@ export default function QuranReaderScreen() {
 
   useEffect(() => {
     loadSurah();
-    return () => { void sound?.unloadAsync(); };
+    return () => { sound?.remove(); };
   }, [surahN]);
 
   async function loadSurah() {
@@ -76,16 +74,16 @@ export default function QuranReaderScreen() {
     }
 
     try {
-      if (sound) { await sound.unloadAsync(); setSound(null); }
+      if (sound) { sound.remove(); setSound(null); }
       if (playingN === n) { setPlayingN(null); return; }
 
-      const { Audio } = require('expo-av') as typeof import('expo-av');
+      const { createAudioPlayer } = require('expo-audio') as typeof import('expo-audio');
       setPlayingN(n);
-      const { sound: newSound } = await Audio.Sound.createAsync({ uri: url });
-      setSound(newSound as unknown as SoundObj);
-      await newSound.playAsync();
-      newSound.setOnPlaybackStatusUpdate((status: any) => {
-        if (status.isLoaded && status.didJustFinish) setPlayingN(null);
+      const player = createAudioPlayer({ uri: url });
+      setSound(player as unknown as SoundObj);
+      player.play();
+      player.addListener('playbackStatusUpdate', (status: any) => {
+        if (status.didJustFinish) setPlayingN(null);
       });
     } catch (e) {
       console.warn('Audio error:', e);
@@ -238,7 +236,7 @@ export default function QuranReaderScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={s.playerPlayBtn}
-            onPress={() => { void sound?.pauseAsync(); setPlayingN(null); }}
+            onPress={() => { sound?.pause(); setPlayingN(null); }}
           >
             <Ionicons name="pause" size={16} color="#fff" />
           </TouchableOpacity>
