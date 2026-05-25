@@ -13,6 +13,7 @@
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~56.0.4",
     "expo-audio": "~56.0.10",
+    "expo-build-properties": "~56.0.14",
     "expo-constants": "~56.0.15",
     "expo-haptics": "~56.0.3",
     "expo-linear-gradient": "~56.0.4",

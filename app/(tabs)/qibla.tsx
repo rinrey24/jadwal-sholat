@@ -60,8 +60,9 @@ export default function QiblaScreen() {
   useEffect(() => {
     setupLocation();
     const sub = Magnetometer.addListener(({ x, y }) => {
-      // heading from magnetometer (degrees from north)
-      let h = Math.atan2(y, x) * (180 / Math.PI);
+      // atan2(-x, y) gives clockwise bearing from magnetic North.
+      // atan2(y,x) was wrong — that measures from the East axis (off by 90°).
+      let h = Math.atan2(-x, y) * (180 / Math.PI);
       h = (h + 360) % 360;
       setHeading(h);
     });
@@ -104,7 +105,11 @@ export default function QiblaScreen() {
     wasAligned.current = aligned;
   }, [aligned]);
 
-  const qiblaArrowRot = arrowDir; // already computed above
+  // Pass the ABSOLUTE qibla bearing (not arrowDir) to the dial SVG.
+  // The dial already rotates by -heading, so the arrow's on-screen angle
+  // becomes (qibla - heading) automatically — i.e. how far to turn to face Mecca.
+  // Using arrowDir here caused heading to be subtracted twice.
+  const qiblaArrowRot = qibla;
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
