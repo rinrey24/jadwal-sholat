@@ -13,9 +13,17 @@ import { Colors } from '../constants/theme';
  */
 export default function SplashIndex() {
   useEffect(() => {
-    isOnboardingDone().then((done) => {
-      router.replace(done ? '/(tabs)' : '/onboarding');
-    });
+    // Wrap in try/catch — unhandled Promise rejections are fatal in
+    // Hermes production builds and will silently close the app.
+    isOnboardingDone()
+      .then((done) => {
+        router.replace(done ? '/(tabs)' : '/onboarding');
+      })
+      .catch((err) => {
+        console.error('Startup navigation error:', err);
+        // Fall back to onboarding so the user sees something
+        router.replace('/onboarding');
+      });
   }, []);
 
   return (

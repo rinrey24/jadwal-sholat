@@ -53,8 +53,10 @@ export default function HomeScreen() {
   }, []);
 
   async function loadLastRead() {
-    const lr = await getLastRead();
-    setLastRead(lr);
+    try {
+      const lr = await getLastRead();
+      setLastRead(lr);
+    } catch { /* ignore — not critical */ }
   }
 
   async function loadData(force = false) {
