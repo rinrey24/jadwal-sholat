@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Animated, Dimensions, StatusBar,
+  Animated, StatusBar,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -12,33 +12,31 @@ import { Colors } from '../constants/theme';
 import GeoPattern from '../components/ui/GeoPattern';
 import { markOnboardingDone } from '../services/storage';
 
-const { width } = Dimensions.get('window');
-
 // ─── Slide data ───────────────────────────────────────────────────────────────
 const SLIDES = [
   {
-    icon:      'moon-outline'    as const,
-    badge:     'Bismillah',
-    title:     'Selamat Datang',
-    desc:      'Muslim App hadir sebagai panduan ibadah harian Anda — lengkap, akurat, dan mudah digunakan.',
-    gradStart: '#0F3520',
-    gradEnd:   '#1F6040',
+    icon:       'moon-outline'    as const,
+    badge:      'Bismillah',
+    accent:     '#C9A227',
+    title:      'Selamat Datang',
+    desc:       'Muslim App hadir sebagai panduan ibadah harian Anda — lengkap, akurat, dan mudah digunakan.',
+    gradColors: ['#0F3520', '#1A5C3A', '#1F6B42'] as [string, string, string],
   },
   {
-    icon:      'book-outline'    as const,
-    badge:     "Iqra' — Bacalah!",
-    title:     "Al-Qur'an & Jadwal Sholat",
-    desc:      "Baca Al-Qur'an lengkap dengan terjemahan Bahasa Indonesia. Pantau jadwal sholat akurat berdasarkan lokasi Anda.",
-    gradStart: '#0F3528',
-    gradEnd:   '#206650',
+    icon:       'book-outline'    as const,
+    badge:      "Iqra' — Bacalah!",
+    accent:     '#6EC6A0',
+    title:      "Al-Qur'an & Jadwal Sholat",
+    desc:       "Baca Al-Qur'an lengkap dengan terjemahan Bahasa Indonesia. Pantau jadwal sholat akurat berdasarkan lokasi Anda.",
+    gradColors: ['#0C2E3A', '#1A566A', '#1F6B7A'] as [string, string, string],
   },
   {
-    icon:      'compass-outline' as const,
-    badge:     'Allahu Akbar',
-    title:     'Kiblat, Dzikir & Doa',
-    desc:      'Temukan arah kiblat, lengkapi ibadah dengan dzikir pagi-petang, tasbih digital, dan 99 Asmaul Husna.',
-    gradStart: '#0F3020',
-    gradEnd:   '#256040',
+    icon:       'compass-outline' as const,
+    badge:      'Allahu Akbar',
+    accent:     '#A8D8A8',
+    title:      'Kiblat, Dzikir & Doa',
+    desc:       'Temukan arah kiblat, lengkapi ibadah dengan dzikir pagi-petang, tasbih digital, dan 99 Asmaul Husna.',
+    gradColors: ['#1A2C0E', '#2D5A1B', '#336B20'] as [string, string, string],
   },
 ];
 
@@ -87,8 +85,8 @@ export default function OnboardingScreen() {
 
       {/* Gradient background — changes per slide */}
       <LinearGradient
-        colors={[slide.gradStart, slide.gradEnd]}
-        start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }}
+        colors={slide.gradColors}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFillObject}
       />
       <GeoPattern color="#fff" opacity={0.04} size={130} />
@@ -117,15 +115,15 @@ export default function OnboardingScreen() {
         ]}
       >
         {/* Decorative badge */}
-        <View style={s.badge}>
-          <Text style={s.badgeText}>✦ {slide.badge} ✦</Text>
+        <View style={[s.badge, { borderColor: slide.accent + '60' }]}>
+          <Text style={[s.badgeText, { color: slide.accent }]}>✦ {slide.badge} ✦</Text>
         </View>
 
         {/* Icon halo */}
         <View style={s.iconHalo}>
-          <View style={s.iconRing} />
-          <View style={s.iconCircle}>
-            <Ionicons name={slide.icon} size={56} color="#fff" />
+          <View style={[s.iconRing, { borderColor: slide.accent + '30' }]} />
+          <View style={[s.iconCircle, { backgroundColor: slide.accent + '28', borderColor: slide.accent + '55' }]}>
+            <Ionicons name={slide.icon} size={56} color={slide.accent} />
           </View>
         </View>
 
@@ -230,23 +228,22 @@ const s = StyleSheet.create({
   },
 
   iconHalo: {
-    width: 160, height: 160,
+    width: 170, height: 170,
     alignItems: 'center', justifyContent: 'center',
     marginBottom: 36,
   },
   iconRing: {
     position: 'absolute',
-    width: 160, height: 160, borderRadius: 80,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    width: 170, height: 170, borderRadius: 85,
+    borderWidth: 1.5,
+    backgroundColor: 'rgba(255,255,255,0.03)',
   },
   iconCircle: {
-    width: 112, height: 112, borderRadius: 56,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)',
+    width: 120, height: 120, borderRadius: 60,
+    borderWidth: 2,
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 20,
-    elevation: 10,
+    shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 24,
+    elevation: 12,
   },
 
   title: {
