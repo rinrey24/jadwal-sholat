@@ -4,6 +4,7 @@ import {
   ActivityIndicator, Share, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
@@ -170,6 +171,7 @@ export default function QuranReaderScreen() {
   if (loading) {
     return (
       <View style={[s.center, { paddingTop: insets.top }]}>
+        <StatusBar style="dark" />
         <ActivityIndicator color={Colors.primary} size="large" />
         <Text style={{ color: Colors.ink3, marginTop: 12 }}>Memuat {surahInfo?.latin}...</Text>
       </View>
@@ -178,6 +180,7 @@ export default function QuranReaderScreen() {
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
+      <StatusBar style="dark" />
       {/* Sticky Header */}
       <View style={s.header}>
         <TouchableOpacity onPress={() => router.back()} style={s.iconBtn}>

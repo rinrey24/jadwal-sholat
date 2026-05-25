@@ -4,6 +4,7 @@ import {
   Switch, Linking, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 
@@ -81,6 +82,7 @@ export default function SettingsScreen() {
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
+      <StatusBar style="dark" />
       <View style={s.header}>
         <Text style={s.headerTitle}>Pengaturan</Text>
       </View>
@@ -264,6 +266,7 @@ export default function SettingsScreen() {
 function SectionHeader({ label }: { label: string }) {
   return (
     <View style={s.sectionHeader}>
+      <StatusBar style="dark" />
       <Text style={s.sectionLabel}>{label.toUpperCase()}</Text>
     </View>
   );
