@@ -9,7 +9,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Colors } from '../constants/theme';
-import GeoPattern from '../components/ui/GeoPattern';
 import { markOnboardingDone } from '../services/storage';
 
 // ─── Slide data ───────────────────────────────────────────────────────────────
@@ -80,8 +79,9 @@ export default function OnboardingScreen() {
   }
 
   return (
-    <View style={s.root}>
-      <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+    <View style={[s.root, { backgroundColor: slide.gradColors[0] }]}>
+      {/* Solid status bar — prevents icons turning black on Samsung */}
+      <StatusBar barStyle="light-content" backgroundColor={slide.gradColors[0]} />
 
       {/* Gradient background — changes per slide */}
       <LinearGradient
@@ -89,7 +89,6 @@ export default function OnboardingScreen() {
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFillObject}
       />
-      <GeoPattern color="#fff" opacity={0.04} size={130} />
 
       {/* Decorative circles */}
       <View style={s.circleTopRight} />
@@ -98,7 +97,7 @@ export default function OnboardingScreen() {
       {/* Skip button (hidden on last slide) */}
       {!isLast && (
         <TouchableOpacity
-          style={[s.skipBtn, { top: insets.top + 12 }]}
+          style={s.skipBtn}
           onPress={finish}
           activeOpacity={0.7}
         >
@@ -111,7 +110,7 @@ export default function OnboardingScreen() {
       <Animated.View
         style={[
           s.content,
-          { paddingTop: insets.top + 16, opacity: fadeAnim, transform: [{ translateY: slideAnim }, { scale: scaleAnim }] },
+          { paddingTop: 24, opacity: fadeAnim, transform: [{ translateY: slideAnim }, { scale: scaleAnim }] },
         ]}
       >
         {/* Decorative badge */}
@@ -180,7 +179,7 @@ export default function OnboardingScreen() {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  root: { flex: 1, overflow: 'hidden' },
+  root: { flex: 1 },
 
   // Decorative background blobs
   circleTopRight: {
@@ -195,7 +194,7 @@ const s = StyleSheet.create({
   },
 
   skipBtn: {
-    position: 'absolute', right: 22,
+    position: 'absolute', top: 14, right: 22,
     flexDirection: 'row', alignItems: 'center', gap: 2,
     paddingHorizontal: 12, paddingVertical: 8,
     borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)',
