@@ -8,6 +8,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
 
 import { Colors, Radius, Shadow } from '../../constants/theme';
 import GeoPattern from '../../components/ui/GeoPattern';
@@ -17,8 +18,9 @@ import {
   fetchPrayerTimes, PrayerTimes, timeToMinutes, fmtCountdown,
   PRAYER_NAMES, HIJRI_MONTHS,
 } from '../../services/prayerApi';
-import { saveLocation, getSavedLocation, getLastRead, LastRead, addBookmark } from '../../services/storage';
+import { saveLocation, getSavedLocation, getLastRead, LastRead, addBookmark, getAppSettings } from '../../services/storage';
 import { DAILY_AYAT } from '../../constants/quranData';
+import { requestNotificationPermission, scheduleAdhanNotifications } from '../../services/notifications';
 
 const PRAYER_ORDER = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'] as const;
 type PrayerKey = typeof PRAYER_ORDER[number];
@@ -92,6 +94,14 @@ export default function HomeScreen() {
       setCity(cityName!);
       const data = await fetchPrayerTimes(lat!, lng!);
       setTimes(data);
+      // Schedule adhan notifications with current settings
+      try {
+        const settings = await getAppSettings();
+        if (settings.notifications) {
+          await requestNotificationPermission();
+          await scheduleAdhanNotifications(data, settings.prayerNotify);
+        }
+      } catch { /* notifications optional */ }
     } catch (e) {
       // Prayer API failed — show last known city but clear times
       setCity((c) => c || FALLBACK.city);
@@ -138,10 +148,17 @@ export default function HomeScreen() {
   const todayDay = dayNames[new Date().getDay()];
 
   if (loading) {
-    return <SkeletonHomeScreen insets={insets} />;
+    return (
+      <>
+        <StatusBar style="light" />
+        <SkeletonHomeScreen insets={insets} />
+      </>
+    );
   }
 
   return (
+    <>
+    <StatusBar style="light" />
     <ScrollView
       style={styles.container}
       contentContainerStyle={{ paddingBottom: 20 }}
@@ -369,6 +386,7 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
     </ScrollView>
+    </>
   );
 }
 

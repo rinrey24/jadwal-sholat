@@ -28,17 +28,21 @@ export default function QuranReaderScreen() {
   const [ayat, setAyat] = useState<AyatData[]>([]);
   const [loading, setLoading] = useState(true);
   const [playingN, setPlayingN] = useState<number | null>(null);
-  const [sound, setSound] = useState<SoundObj | null>(null);
+  const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const [bookmarkedSet, setBookmarkedSet] = useState<Set<number>>(new Set());
   const [showTranslit, setShowTranslit] = useState(true);
   const [fontSize, setFontSize] = useState(24);
   const scrollRef = useRef<ScrollView>(null);
+  const soundRef = useRef<SoundObj | null>(null);
+  const autoPlayRef = useRef(false);
+  const playingNRef = useRef<number | null>(null);
+  const ayatRef = useRef<AyatData[]>([]);
 
   const surahInfo = SURAHS.find((s) => s.n === surahN);
 
   useEffect(() => {
     loadSurah();
-    return () => { sound?.remove(); };
+    return () => { soundRef.current?.remove(); };
   }, [surahN]);
 
   async function loadSurah() {
@@ -60,10 +64,10 @@ export default function QuranReaderScreen() {
     }
   }
 
-  async function playAudio(url: string, n: number) {
-    // In Expo Go (executionEnvironment !== 'bare') the ExponentAV native
-    // module is not available. Bail early so we never require('expo-av'),
-    // which prevents Metro's guardedLoadModule from logging a red error.
+  // Keep ayatRef always pointing to the latest list (safe inside listener callbacks)
+  useEffect(() => { ayatRef.current = ayat; }, [ayat]);
+
+  async function playAudio(url: string, n: number, autoAdvance = false) {
     if (!AUDIO_SUPPORTED) {
       Alert.alert(
         'Audio tidak tersedia di Expo Go',
@@ -74,20 +78,70 @@ export default function QuranReaderScreen() {
     }
 
     try {
-      if (sound) { sound.remove(); setSound(null); }
-      if (playingN === n) { setPlayingN(null); return; }
+      // Stop and clean up any currently playing audio
+      if (soundRef.current) {
+        soundRef.current.remove();
+        soundRef.current = null;
+      }
+
+      // If the same ayat is tapped again (not an auto-advance), toggle off
+      if (!autoAdvance && playingNRef.current === n) {
+        playingNRef.current = null;
+        setPlayingN(null);
+        return;
+      }
 
       const { createAudioPlayer } = require('expo-audio') as typeof import('expo-audio');
+      playingNRef.current = n;
       setPlayingN(n);
       const player = createAudioPlayer({ uri: url });
-      setSound(player as unknown as SoundObj);
+      soundRef.current = player as unknown as SoundObj;
       player.play();
       player.addListener('playbackStatusUpdate', (status: any) => {
-        if (status.didJustFinish) setPlayingN(null);
+        if (status.didJustFinish) {
+          const currentN = playingNRef.current;
+          if (autoPlayRef.current && currentN !== null) {
+            // Auto-advance to the next ayat
+            const nextAyat = ayatRef.current.find(a => a.numberInSurah === currentN + 1);
+            if (nextAyat) {
+              playAudio(nextAyat.audio, nextAyat.numberInSurah, true);
+            } else {
+              // Reached end of surah
+              autoPlayRef.current = false;
+              setIsAutoPlaying(false);
+              playingNRef.current = null;
+              setPlayingN(null);
+              soundRef.current = null;
+            }
+          } else {
+            playingNRef.current = null;
+            setPlayingN(null);
+            soundRef.current = null;
+          }
+        }
       });
     } catch (e) {
       console.warn('Audio error:', e);
+      playingNRef.current = null;
       setPlayingN(null);
+      soundRef.current = null;
+    }
+  }
+
+  function toggleAutoPlay() {
+    if (isAutoPlaying) {
+      // Stop everything
+      autoPlayRef.current = false;
+      setIsAutoPlaying(false);
+      if (soundRef.current) { soundRef.current.remove(); soundRef.current = null; }
+      playingNRef.current = null;
+      setPlayingN(null);
+    } else {
+      // Start playing from the first ayat
+      autoPlayRef.current = true;
+      setIsAutoPlaying(true);
+      const firstAyat = ayatRef.current[0];
+      if (firstAyat) playAudio(firstAyat.audio, firstAyat.numberInSurah, true);
     }
   }
 
@@ -138,8 +192,15 @@ export default function QuranReaderScreen() {
         <TouchableOpacity onPress={() => setShowTranslit(!showTranslit)} style={s.iconBtn}>
           <Ionicons name={showTranslit ? 'text' : 'text-outline'} size={18} color={Colors.ink2} />
         </TouchableOpacity>
-        <TouchableOpacity style={s.iconBtn}>
-          <Ionicons name="settings-outline" size={18} color={Colors.ink2} />
+        <TouchableOpacity
+          style={[s.iconBtn, isAutoPlaying && { backgroundColor: Colors.primary }]}
+          onPress={toggleAutoPlay}
+        >
+          <Ionicons
+            name={isAutoPlaying ? 'stop-circle-outline' : 'play-circle-outline'}
+            size={20}
+            color={isAutoPlaying ? '#fff' : Colors.ink2}
+          />
         </TouchableOpacity>
       </View>
 
@@ -229,18 +290,36 @@ export default function QuranReaderScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={s.playerTitle}>{surahInfo?.latin} · Ayat {playingN}</Text>
-            <Text style={s.playerSub}>Mishary Rashid · 1.0×</Text>
+            <Text style={s.playerSub}>{isAutoPlaying ? 'Auto-play aktif' : 'Mishary Rashid · 1.0×'}</Text>
           </View>
-          <TouchableOpacity onPress={() => { if (playingN > 1) setPlayingN(playingN - 1); }}>
+          <TouchableOpacity onPress={() => {
+            const prev = playingNRef.current;
+            if (prev && prev > 1) {
+              const prevAyat = ayatRef.current.find(a => a.numberInSurah === prev - 1);
+              if (prevAyat) playAudio(prevAyat.audio, prevAyat.numberInSurah, autoPlayRef.current);
+            }
+          }}>
             <Ionicons name="play-skip-back" size={18} color={Colors.ink2} />
           </TouchableOpacity>
           <TouchableOpacity
             style={s.playerPlayBtn}
-            onPress={() => { sound?.pause(); setPlayingN(null); }}
+            onPress={() => {
+              autoPlayRef.current = false;
+              setIsAutoPlaying(false);
+              if (soundRef.current) { soundRef.current.remove(); soundRef.current = null; }
+              playingNRef.current = null;
+              setPlayingN(null);
+            }}
           >
             <Ionicons name="pause" size={16} color="#fff" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => { if (playingN < ayat.length) setPlayingN(playingN + 1); }}>
+          <TouchableOpacity onPress={() => {
+            const curr = playingNRef.current;
+            if (curr !== null) {
+              const nextAyat = ayatRef.current.find(a => a.numberInSurah === curr + 1);
+              if (nextAyat) playAudio(nextAyat.audio, nextAyat.numberInSurah, autoPlayRef.current);
+            }
+          }}>
             <Ionicons name="play-skip-forward" size={18} color={Colors.ink2} />
           </TouchableOpacity>
         </View>

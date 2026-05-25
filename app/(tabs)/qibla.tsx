@@ -9,6 +9,7 @@ import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 import Svg, { Circle, Line, Text as SvgText, G, Path, Rect } from 'react-native-svg';
 
+import { StatusBar } from 'expo-status-bar';
 import { Colors } from '../../constants/theme';
 import GeoPattern from '../../components/ui/GeoPattern';
 import CustomModal from '../../components/ui/CustomModal';
@@ -107,6 +108,7 @@ export default function QiblaScreen() {
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
+      <StatusBar style="light" />
       <GeoPattern color={Colors.gold} opacity={0.05} size={100} />
 
       {/* Header */}

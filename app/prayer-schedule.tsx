@@ -217,7 +217,7 @@ export default function PrayerScheduleScreen() {
 
         {/* Bottom actions */}
         <View style={s.actions}>
-          <TouchableOpacity style={s.actionBtn} onPress={() => router.push('/calendar')}>
+          <TouchableOpacity style={s.actionBtn} onPress={() => router.push('/monthly-schedule')}>
             <Ionicons name="calendar-outline" size={16} color={Colors.ink} />
             <Text style={s.actionBtnText}>Jadwal Bulanan</Text>
           </TouchableOpacity>

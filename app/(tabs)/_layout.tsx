@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { View, Text, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/theme';
 
@@ -31,11 +32,14 @@ function TabIcon({ name, focused, label }: TabIconProps) {
 }
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = 62 + insets.bottom;
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [styles.tabBar, { height: tabBarHeight, paddingBottom: insets.bottom }],
         tabBarShowLabel: false,
         tabBarItemStyle: styles.tabBarItem,
         // Let the icon wrapper fill the full item width so our custom
@@ -100,14 +104,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(252, 251, 247, 0.97)',
     borderTopColor: Colors.line,
     borderTopWidth: 0.5,
-    height: 72,
-    paddingBottom: 0,
     paddingTop: 0,
     elevation: 0,
     shadowOpacity: 0,
   },
   tabBarItem: {
-    height: 72,
     paddingTop: 0,
     paddingBottom: 0,
   },

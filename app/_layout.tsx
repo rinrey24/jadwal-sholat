@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { setupNotificationHandler } from '../services/notifications';
 
 // ─── Production Error Boundary ───────────────────────────────────────────────
 // In Hermes production builds, React errors crash silently.
@@ -54,9 +55,15 @@ const eb = StyleSheet.create({
 
 // ─── Root Layout ─────────────────────────────────────────────────────────────
 export default function RootLayout() {
+  useEffect(() => {
+    setupNotificationHandler();
+  }, []);
+
   return (
     <ErrorBoundary>
-      <StatusBar style="auto" />
+      {/* Default: dark icons for light/white backgrounds.
+          Screens with dark headers override this with style="light". */}
+      <StatusBar style="dark" backgroundColor="transparent" translucent />
       <Stack screenOptions={{ headerShown: false }}>
         {/* Splash router — checks onboarding status, redirects immediately */}
         <Stack.Screen name="index"      options={{ headerShown: false, animation: 'none' }} />
@@ -85,6 +92,10 @@ export default function RootLayout() {
         />
         <Stack.Screen
           name="tasbih"
+          options={{ headerShown: false, animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="monthly-schedule"
           options={{ headerShown: false, animation: 'slide_from_right' }}
         />
       </Stack>
