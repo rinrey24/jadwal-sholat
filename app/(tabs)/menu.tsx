@@ -223,6 +223,7 @@ export default function SettingsScreen() {
         title="Metode Hisab"
         message="Pilih metode perhitungan waktu sholat"
         iconName="calculator-outline"
+        listMode
         onClose={() => setMethodModal(false)}
         buttons={CALC_METHODS.map((m) => ({
           text: m.label,
@@ -234,6 +235,7 @@ export default function SettingsScreen() {
         visible={soundModal}
         title="Suara Adzan"
         iconName="volume-medium-outline"
+        listMode
         onClose={() => setSoundModal(false)}
         buttons={ADZAN_SOUNDS.map((sd) => ({
           text: sd.label,
@@ -245,6 +247,7 @@ export default function SettingsScreen() {
         visible={minuteModal}
         title="Menit Sebelum Adzan"
         iconName="alarm-outline"
+        listMode
         onClose={() => setMinuteModal(false)}
         buttons={NOTIFY_MINUTES.map((m) => ({
           text: m === 0 ? 'Tepat waktu' : `${m} menit sebelumnya`,

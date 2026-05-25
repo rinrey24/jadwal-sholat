@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  RefreshControl, ActivityIndicator, Share,
+  RefreshControl, Share, Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -136,12 +136,7 @@ export default function HomeScreen() {
   const todayDay = dayNames[new Date().getDay()];
 
   if (loading) {
-    return (
-      <View style={[styles.loadingContainer, { paddingTop: insets.top }]}>
-        <ActivityIndicator color={Colors.primary} size="large" />
-        <Text style={styles.loadingText}>Memuat jadwal sholat...</Text>
-      </View>
-    );
+    return <SkeletonHomeScreen insets={insets} />;
   }
 
   return (
@@ -376,6 +371,104 @@ export default function HomeScreen() {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Skeleton loader
+// ─────────────────────────────────────────────────────────────
+function SkeletonHomeScreen({ insets }: { insets: { top: number } }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 750, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 750, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+
+  const lightOp = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.12, 0.25] });
+  const grayOp  = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5,  0.85] });
+
+  // Reusable bone on hero (white shimmer)
+  const HeroBone = ({ w, h, r = 8, mt = 0 }: { w: any; h: number; r?: number; mt?: number }) => (
+    <Animated.View style={{ width: w, height: h, borderRadius: r, backgroundColor: '#fff', opacity: lightOp, marginTop: mt }} />
+  );
+
+  // Reusable bone on light bg (gray shimmer)
+  // When `w` is omitted and `flex` is true, the element uses flex:1 (for grid cells)
+  const GrayBone = ({ w, h, r = 8, flex: useFlex, bg, style }: { w?: any; h: number; r?: number; flex?: boolean; bg?: string; style?: any }) => (
+    <Animated.View style={[
+      { height: h, borderRadius: r, backgroundColor: bg ?? Colors.chip,
+        ...(useFlex ? { flex: 1 } : { width: w ?? '100%' }) },
+      { opacity: grayOp },
+      style,
+    ]} />
+  );
+
+  return (
+    <View style={{ flex: 1, backgroundColor: Colors.bg }}>
+      {/* ── Hero ── */}
+      <LinearGradient
+        colors={[Colors.primaryDeep, Colors.primary, Colors.primaryWarm]}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={{ paddingTop: insets.top + 12, paddingBottom: 50, paddingHorizontal: 22,
+          borderBottomLeftRadius: 32, borderBottomRightRadius: 32, overflow: 'hidden' }}
+      >
+        {/* Top row */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <HeroBone w={130} h={20} r={10} />
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <HeroBone w={34} h={34} r={17} />
+            <HeroBone w={34} h={34} r={17} />
+          </View>
+        </View>
+        {/* Date */}
+        <HeroBone w={160} h={13} r={7} mt={26} />
+        <HeroBone w={200} h={32} r={8} mt={8} />
+        {/* Next prayer card */}
+        <Animated.View style={{
+          marginTop: 20, height: 96, borderRadius: 22,
+          backgroundColor: 'rgba(255,255,255,0.08)',
+          opacity: lightOp,
+          borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+        }} />
+      </LinearGradient>
+
+      {/* ── Prayer strip ── */}
+      <View style={{ paddingHorizontal: 16, marginTop: -22 }}>
+        <GrayBone h={80} r={Radius.xl} bg={Colors.surface} style={Shadow.card} />
+      </View>
+
+      {/* ── Section label ── */}
+      <View style={{ paddingHorizontal: 20, marginTop: 26, marginBottom: 12 }}>
+        <GrayBone w={70} h={11} r={6} bg={Colors.line} />
+      </View>
+
+      {/* ── Quick actions 2×2 ── */}
+      <View style={{ paddingHorizontal: 16, gap: 10 }}>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <GrayBone h={96} r={Radius.xl} flex bg={Colors.primarySoft} />
+          <GrayBone h={96} r={Radius.xl} flex bg={Colors.chip} />
+        </View>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <GrayBone h={96} r={Radius.xl} flex bg={Colors.chip} />
+          <GrayBone h={96} r={Radius.xl} flex bg={Colors.chip} />
+        </View>
+      </View>
+
+      {/* ── Ayat card placeholder ── */}
+      <View style={{ paddingHorizontal: 20, marginTop: 26, marginBottom: 12 }}>
+        <GrayBone w={90} h={11} r={6} bg={Colors.line} />
+      </View>
+      <View style={{ paddingHorizontal: 16 }}>
+        <GrayBone h={130} r={Radius.xxl} bg={Colors.chip} />
+      </View>
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // Sub-components
 // ─────────────────────────────────────────────────────────────
 function SectionLabel({ title, action }: { title: string; action?: React.ReactNode }) {
@@ -462,8 +555,6 @@ const qaStyles = StyleSheet.create({
 // ─────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.bg, gap: 12 },
-  loadingText: { color: Colors.ink3, fontSize: 14 },
 
   hero: {
     paddingBottom: 36, paddingHorizontal: 22,
