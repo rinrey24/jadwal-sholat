@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 
@@ -77,6 +77,12 @@ export default function QuranReaderScreen() {
 
   // Keep ayatRef always pointing to the latest list (safe inside listener callbacks)
   useEffect(() => { ayatRef.current = ayat; }, [ayat]);
+
+  // Reload font size every time this screen comes into focus (catches setting changes
+  // made while the reader was still alive in the navigation stack)
+  useFocusEffect(React.useCallback(() => {
+    getAppSettings().then((s) => setFontSize(FONT_SIZE_MAP[s.fontSize] ?? 24));
+  }, []));
 
   async function playAudio(url: string, n: number, autoAdvance = false) {
     if (!AUDIO_SUPPORTED) {
@@ -274,7 +280,7 @@ export default function QuranReaderScreen() {
                 </View>
 
                 {/* Arabic text */}
-                <Text style={[s.arabicText, { fontSize, marginTop: 10 }]}>
+                <Text style={[s.arabicText, { fontSize, lineHeight: fontSize * 2.2, marginTop: 10 }]}>
                   {a.arab}
                 </Text>
 

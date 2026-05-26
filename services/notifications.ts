@@ -10,7 +10,10 @@ import type { PrayerTimes } from './prayerApi';
 export async function setupNotificationHandler() {
   // Create Android notification channel with sound BEFORE scheduling any notifications
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('adhan', {
+    // Use 'adhan_v2' so Android creates a fresh channel with sound enabled.
+    // If the old 'adhan' channel was created without sound, Android locks that
+    // setting and ignores programmatic updates — a new channel ID forces it fresh.
+    await Notifications.setNotificationChannelAsync('adhan_v2', {
       name: 'Adzan',
       description: 'Notifikasi waktu sholat',
       importance: Notifications.AndroidImportance.MAX,
@@ -98,7 +101,7 @@ export async function scheduleAdhanNotifications(
         body: ADHAN_MESSAGES[p.key],
         sound: true,
         ...(Platform.OS === 'android' && {
-          channelId: 'adhan',
+          channelId: 'adhan_v2',
           priority: Notifications.AndroidNotificationPriority.MAX,
           vibrationPattern: [0, 250, 250, 250],
           color: '#2D7A5E',
