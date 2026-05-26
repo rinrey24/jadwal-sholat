@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -28,6 +28,8 @@ const DZIKIR_CATS = [
 export default function DzikirScreen() {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<TabId>('dzikir');
+  const [searchVisible, setSearchVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const nowHour = new Date().getHours();
   const isAfternoon = nowHour >= 15 && nowHour < 18;
@@ -41,16 +43,48 @@ export default function DzikirScreen() {
     { id: 'asma', label: 'Asmaul Husna' },
   ];
 
+  // Filtered lists for search
+  const q = searchQuery.toLowerCase();
+  const filteredDzikir = searchQuery
+    ? DZIKIR_CATS.filter((c) => c.label.toLowerCase().includes(q) || c.sub.toLowerCase().includes(q))
+    : DZIKIR_CATS;
+  const filteredDoa = searchQuery
+    ? DOA_HARIAN.filter((d) => d.label.toLowerCase().includes(q))
+    : DOA_HARIAN;
+
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
       {/* Header */}
       <View style={s.header}>
         <Text style={s.headerTitle}>Dzikir & Doa</Text>
-        <TouchableOpacity style={s.iconBtn}>
-          <Ionicons name="search-outline" size={20} color={Colors.ink2} />
+        <TouchableOpacity
+          style={[s.iconBtn, searchVisible && s.iconBtnActive]}
+          onPress={() => { setSearchVisible((v) => !v); if (searchVisible) setSearchQuery(''); }}
+        >
+          <Ionicons name={searchVisible ? 'close' : 'search-outline'} size={20} color={searchVisible ? Colors.primary : Colors.ink2} />
         </TouchableOpacity>
       </View>
+
+      {/* Search bar — shown when search icon pressed */}
+      {searchVisible && (
+        <View style={s.searchBox}>
+          <Ionicons name="search-outline" size={16} color={Colors.ink3} />
+          <TextInput
+            style={s.searchInput}
+            placeholder="Cari dzikir atau doa..."
+            placeholderTextColor={Colors.ink3}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoFocus
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={16} color={Colors.ink3} />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
         {/* Hero card */}
@@ -101,7 +135,10 @@ export default function DzikirScreen() {
         {/* Tab content */}
         {tab === 'dzikir' && (
           <View style={[s.px, { gap: 10 }]}>
-            {DZIKIR_CATS.map((c) => (
+            {filteredDzikir.length === 0 && (
+              <Text style={s.emptySearch}>Tidak ditemukan</Text>
+            )}
+            {filteredDzikir.map((c) => (
               <TouchableOpacity
                 key={c.id}
                 activeOpacity={0.8}
@@ -131,8 +168,11 @@ export default function DzikirScreen() {
 
         {tab === 'doa' && (
           <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
-            {Array.from({ length: Math.ceil(DOA_HARIAN.length / 2) }).map((_, rowIdx) => {
-              const pair = DOA_HARIAN.slice(rowIdx * 2, rowIdx * 2 + 2);
+            {filteredDoa.length === 0 && (
+              <Text style={s.emptySearch}>Tidak ditemukan</Text>
+            )}
+            {Array.from({ length: Math.ceil(filteredDoa.length / 2) }).map((_, rowIdx) => {
+              const pair = filteredDoa.slice(rowIdx * 2, rowIdx * 2 + 2);
               return (
                 <View key={rowIdx} style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
                   {pair.map((d) => (
@@ -172,6 +212,14 @@ const s = StyleSheet.create({
   },
   headerTitle: { fontSize: 22, fontWeight: '700', color: Colors.ink },
   iconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.chip, alignItems: 'center', justifyContent: 'center' },
+  iconBtnActive: { backgroundColor: Colors.primarySoft },
+  searchBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginHorizontal: 16, marginTop: 8, marginBottom: 4,
+    padding: 10, paddingHorizontal: 14, borderRadius: 14, backgroundColor: Colors.chip,
+  },
+  searchInput: { flex: 1, fontSize: 13, color: Colors.ink },
+  emptySearch: { textAlign: 'center', color: Colors.ink3, fontSize: 14, paddingVertical: 24 },
   px: { paddingHorizontal: 16, paddingTop: 8 },
 
   heroCard: { borderRadius: 22, padding: 18, overflow: 'hidden', marginBottom: 4 },

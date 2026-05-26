@@ -18,7 +18,7 @@ import { Colors, Radius, Shadow } from '../constants/theme';
 import Ornament from '../components/ui/Ornament';
 import { fetchSurah, AyatData } from '../services/quranApi';
 import { SURAHS } from '../constants/quranData';
-import { saveLastRead, addBookmark } from '../services/storage';
+import { saveLastRead, addBookmark, removeBookmark, getBookmarks, getAppSettings } from '../services/storage';
 
 export default function QuranReaderScreen() {
   const insets = useSafeAreaInsets();
@@ -33,6 +33,9 @@ export default function QuranReaderScreen() {
   const [bookmarkedSet, setBookmarkedSet] = useState<Set<number>>(new Set());
   const [showTranslit, setShowTranslit] = useState(true);
   const [fontSize, setFontSize] = useState(24);
+
+  // Font-size map for the 3-level setting in menu
+  const FONT_SIZE_MAP: Record<string, number> = { small: 20, medium: 24, large: 30 };
   const scrollRef = useRef<ScrollView>(null);
   const soundRef = useRef<SoundObj | null>(null);
   const autoPlayRef = useRef(false);
@@ -43,6 +46,13 @@ export default function QuranReaderScreen() {
 
   useEffect(() => {
     loadSurah();
+    // Load font size from settings
+    getAppSettings().then((s) => setFontSize(FONT_SIZE_MAP[s.fontSize] ?? 24));
+    // Load existing bookmarks for this surah
+    getBookmarks().then((bms) => {
+      const set = new Set(bms.filter((b) => b.surahN === surahN).map((b) => b.ayatN));
+      setBookmarkedSet(set);
+    });
     return () => { soundRef.current?.remove(); };
   }, [surahN]);
 
@@ -148,6 +158,8 @@ export default function QuranReaderScreen() {
 
   async function toggleBookmark(a: AyatData) {
     if (bookmarkedSet.has(a.numberInSurah)) {
+      // Remove from storage AND local state
+      await removeBookmark(`${surahN}_${a.numberInSurah}`);
       const next = new Set(bookmarkedSet);
       next.delete(a.numberInSurah);
       setBookmarkedSet(next);

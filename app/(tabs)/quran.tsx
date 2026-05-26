@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -22,10 +22,14 @@ export default function QuranScreen() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [showBookmarks, setShowBookmarks] = useState(false);
 
-  useEffect(() => {
-    getLastRead().then(setLastRead);
-    getBookmarks().then(setBookmarks);
-  }, []);
+  // Reload last-read and bookmarks every time this tab comes into focus
+  // (user may have added/removed bookmarks in the reader and returned here)
+  useFocusEffect(
+    React.useCallback(() => {
+      getLastRead().then(setLastRead);
+      getBookmarks().then(setBookmarks);
+    }, [])
+  );
 
   const filteredSurahs = SURAHS.filter(
     (s) =>

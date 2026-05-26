@@ -26,7 +26,6 @@ function TabIcon({ name, focused, label }: TabIconProps) {
       >
         {label}
       </Text>
-      {focused && <View style={styles.activeDot} />}
     </View>
   );
 }
@@ -129,13 +128,5 @@ const styles = StyleSheet.create({
     fontSize: 9,
     letterSpacing: 0,
     textAlign: 'center',
-  },
-  activeDot: {
-    position: 'absolute',
-    bottom: 6,
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.primary,
   },
 });

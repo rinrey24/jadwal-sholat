@@ -7,7 +7,20 @@ import { Platform } from 'react-native';
 import type { PrayerTimes } from './prayerApi';
 
 // Configure foreground behavior once (call from _layout.tsx)
-export function setupNotificationHandler() {
+export async function setupNotificationHandler() {
+  // Create Android notification channel with sound BEFORE scheduling any notifications
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('adhan', {
+      name: 'Adzan',
+      description: 'Notifikasi waktu sholat',
+      importance: Notifications.AndroidImportance.MAX,
+      sound: 'default',
+      vibrationPattern: [0, 250, 250, 250],
+      enableLights: true,
+      lightColor: '#2D7A5E',
+    });
+  }
+
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowBanner: true,
@@ -85,8 +98,9 @@ export async function scheduleAdhanNotifications(
         body: ADHAN_MESSAGES[p.key],
         sound: true,
         ...(Platform.OS === 'android' && {
+          channelId: 'adhan',
           priority: Notifications.AndroidNotificationPriority.MAX,
-          vibrate: [0, 250, 250, 250],
+          vibrationPattern: [0, 250, 250, 250],
           color: '#2D7A5E',
         }),
       },

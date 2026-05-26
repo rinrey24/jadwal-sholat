@@ -34,7 +34,7 @@ export async function fetchPrayerTimes(lat: number, lng: number, method = 20, da
   const month = d.getMonth() + 1;
   const year = d.getFullYear();
 
-  const url = `https://api.aladhan.com/v1/timings/${day}-${month}-${year}?latitude=${lat}&longitude=${lng}&method=${method}&school=1`;
+  const url = `https://api.aladhan.com/v1/timings/${day}-${month}-${year}?latitude=${lat}&longitude=${lng}&method=${method}&school=0`;
 
   const res = await fetch(url);
   if (!res.ok) throw new Error('Failed to fetch prayer times');
@@ -47,7 +47,7 @@ export async function fetchPrayerTimes(lat: number, lng: number, method = 20, da
 }
 
 export async function fetchMonthlyPrayerTimes(lat: number, lng: number, month: number, year: number, method = 20) {
-  const url = `https://api.aladhan.com/v1/calendar/${year}/${month}?latitude=${lat}&longitude=${lng}&method=${method}&school=1`;
+  const url = `https://api.aladhan.com/v1/calendar/${year}/${month}?latitude=${lat}&longitude=${lng}&method=${method}&school=0`;
   const res = await fetch(url);
   if (!res.ok) throw new Error('Failed to fetch monthly prayer times');
   const json = await res.json();

@@ -56,7 +56,7 @@ const eb = StyleSheet.create({
 // ─── Root Layout ─────────────────────────────────────────────────────────────
 export default function RootLayout() {
   useEffect(() => {
-    setupNotificationHandler();
+    setupNotificationHandler(); // async — channel created before first notification
   }, []);
 
   return (

@@ -8,6 +8,7 @@ import { Magnetometer } from 'expo-sensors';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 import Svg, { Circle, Line, Text as SvgText, G, Path, Rect } from 'react-native-svg';
+import { useIsFocused } from 'expo-router';
 
 import { StatusBar } from 'expo-status-bar';
 import { Colors } from '../../constants/theme';
@@ -46,6 +47,7 @@ function calcDistance(lat: number, lng: number): number {
 
 export default function QiblaScreen() {
   const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
   const [heading, setHeading] = useState(0);
   const [qibla, setQibla] = useState(295); // default Jakarta
   const [distance, setDistance] = useState(7926);
@@ -95,15 +97,20 @@ export default function QiblaScreen() {
   }, [heading]);
 
   // Derived alignment (computed during render, see below) — fire haptics
-  // only when alignment edge changes. This effect is cheap and won't loop.
+  // only when alignment edge changes AND the Qibla tab is active.
   const arrowDir = (qibla - heading + 360) % 360;
   const aligned = arrowDir < 5 || arrowDir > 355;
   useEffect(() => {
+    // Guard: only vibrate when user is actually on the Qibla screen
+    if (!isFocused) {
+      wasAligned.current = aligned;
+      return;
+    }
     if (aligned && !wasAligned.current) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
     wasAligned.current = aligned;
-  }, [aligned]);
+  }, [aligned, isFocused]);
 
   // Pass the ABSOLUTE qibla bearing (not arrowDir) to the dial SVG.
   // The dial already rotates by -heading, so the arrow's on-screen angle
