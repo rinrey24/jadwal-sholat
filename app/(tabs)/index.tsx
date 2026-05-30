@@ -16,8 +16,9 @@ import Ornament from '../../components/ui/Ornament';
 import Card from '../../components/ui/Card';
 import {
   fetchPrayerTimes, PrayerTimes, timeToMinutes, fmtCountdown,
-  PRAYER_NAMES, HIJRI_MONTHS,
+  PRAYER_NAMES, HIJRI_MONTHS, HIJRI_EVENTS,
 } from '../../services/prayerApi';
+import { gregorianToHijri, hijriToGregorian } from '../../services/hijriUtils';
 import { saveLocation, getSavedLocation, getLastRead, LastRead, addBookmark, getAppSettings } from '../../services/storage';
 import { DAILY_AYAT } from '../../constants/quranData';
 import { requestNotificationPermission, scheduleAdhanNotifications } from '../../services/notifications';
@@ -32,6 +33,71 @@ const PRAYER_ICONS: Record<PrayerKey, string> = {
 function getNowMinutes() {
   const now = new Date();
   return now.getHours() * 60 + now.getMinutes();
+}
+
+/**
+ * Find the next upcoming Islamic event from today onwards.
+ * Returns event details including daysRemaining and gregDate.
+ */
+function findNextUpcomingEvent(): {
+  month: number;
+  day: number;
+  label: string;
+  desc: string;
+  daysRemaining: number;
+  gregDate: { y: number; m: number; d: number };
+} | null {
+  const now = new Date();
+  const today = gregorianToHijri(now.getFullYear(), now.getMonth() + 1, now.getDate());
+
+  // Sort all events by month then day
+  const allEvents = Object.values(HIJRI_EVENTS)
+    .flat()
+    .sort((a, b) => a.month !== b.month ? a.month - b.month : a.day - b.day);
+
+  // Find the next event starting from today
+  for (const event of allEvents) {
+    const eventIsInFuture =
+      event.month > today.m ||
+      (event.month === today.m && event.day >= today.d);
+
+    if (eventIsInFuture) {
+      // Calculate days remaining
+      const eventGregDate = hijriToGregorian(today.y, event.month, event.day);
+      const eventDate = new Date(eventGregDate.y, eventGregDate.m - 1, eventGregDate.d);
+      const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const daysRemaining = Math.ceil((eventDate.getTime() - todayDate.getTime()) / (1000 * 86400));
+
+      return {
+        month: event.month,
+        day: event.day,
+        label: event.label,
+        desc: event.desc,
+        daysRemaining: Math.max(0, daysRemaining),
+        gregDate: eventGregDate,
+      };
+    }
+  }
+
+  // If no event found in current year, wrap to first event of next year (month 1 Muharram)
+  const firstEvent = allEvents[0];
+  if (firstEvent) {
+    const nextYearEvent = hijriToGregorian(today.y + 1, firstEvent.month, firstEvent.day);
+    const eventDate = new Date(nextYearEvent.y, nextYearEvent.m - 1, nextYearEvent.d);
+    const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const daysRemaining = Math.ceil((eventDate.getTime() - todayDate.getTime()) / (1000 * 86400));
+
+    return {
+      month: firstEvent.month,
+      day: firstEvent.day,
+      label: firstEvent.label,
+      desc: firstEvent.desc,
+      daysRemaining: Math.max(0, daysRemaining),
+      gregDate: nextYearEvent,
+    };
+  }
+
+  return null;
 }
 
 export default function HomeScreen() {
@@ -368,22 +434,39 @@ export default function HomeScreen() {
       {/* UPCOMING */}
       <SectionLabel title="Akan datang" />
       <View style={[styles.px, { marginBottom: 12 }]}>
-        <TouchableOpacity activeOpacity={0.85} onPress={() => router.push('/calendar')}>
-        <Card pad={16} radius={Radius.xl} style={styles.upcomingCard}>
-          <View style={styles.upcomingDateBox}>
-            <Text style={styles.upcomingMonth} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>DZULHIJJAH</Text>
-            <Text style={styles.upcomingDay}>10</Text>
-            <Text style={styles.upcomingYear}>{hijri?.year} H</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.upcomingTitle}>Idul Adha</Text>
-            <Text style={styles.upcomingSub}>
-              3 hari lagi · Jumat, 28 Mei 2026
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={Colors.ink3} />
-        </Card>
-        </TouchableOpacity>
+        {(() => {
+          const upcoming = findNextUpcomingEvent();
+          if (!upcoming) return null;
+
+          const monthName = HIJRI_MONTHS[upcoming.month];
+          const gregDate = new Date(upcoming.gregDate.y, upcoming.gregDate.m - 1, upcoming.gregDate.d);
+          const dayName = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'][gregDate.getDay()];
+          const monthName_Greg = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][gregDate.getMonth()];
+          const countdownText = upcoming.daysRemaining === 0 ? 'Hari ini'
+            : upcoming.daysRemaining === 1 ? 'Besok'
+            : `${upcoming.daysRemaining} hari lagi`;
+
+          return (
+            <TouchableOpacity activeOpacity={0.85} onPress={() => router.push('/calendar')}>
+              <Card pad={16} radius={Radius.xl} style={styles.upcomingCard}>
+                <View style={styles.upcomingDateBox}>
+                  <Text style={styles.upcomingMonth} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+                    {monthName?.toUpperCase()}
+                  </Text>
+                  <Text style={styles.upcomingDay}>{upcoming.day}</Text>
+                  <Text style={styles.upcomingYear}>{hijri?.year} H</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.upcomingTitle}>{upcoming.label}</Text>
+                  <Text style={styles.upcomingSub}>
+                    {countdownText} · {dayName}, {gregDate.getDate()} {monthName_Greg} {gregDate.getFullYear()}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Colors.ink3} />
+              </Card>
+            </TouchableOpacity>
+          );
+        })()}
       </View>
     </ScrollView>
     </>

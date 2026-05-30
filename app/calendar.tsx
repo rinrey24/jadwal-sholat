@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -10,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radius } from '../constants/theme';
 import Card from '../components/ui/Card';
 import { HIJRI_MONTHS, HIJRI_EVENTS } from '../services/prayerApi';
+import { hijriToGregorian, gregorianToHijri, hijriToJDN } from '../services/hijriUtils';
 
 const DOW = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
 const GREG_MONTHS_SHORT = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
@@ -21,123 +23,198 @@ interface DayCell {
   gregDay: number;
   gregMonth: string;
   isOther: boolean;
+  isActualToday?: boolean; // true only for today's real date
   hasEvent?: boolean;
   eventColor?: string;
   eventLabel?: string;
 }
 
-// ─── Date conversion utilities (arithmetic / tabular Islamic calendar) ────────
+// ─── Date conversion utilities imported from hijriUtils ──────────────────
 
-/** Gregorian → Julian Day Number */
-function gregToJDN(gy: number, gm: number, gd: number): number {
-  const a = Math.floor((14 - gm) / 12);
-  const y = gy + 4800 - a;
-  const m = gm + 12 * a - 3;
-  return gd + Math.floor((153 * m + 2) / 5) + 365 * y
-    + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) - 32045;
-}
-
-/** Hijri → Julian Day Number */
-function hijriToJDN(hy: number, hm: number, hd: number): number {
-  return Math.floor((11 * hy + 3) / 30) + 354 * hy
-    + 30 * hm - Math.floor((hm - 1) / 2) + hd + 1948440 - 385;
-}
-
-/** Julian Day Number → Gregorian */
-function jdnToGreg(jdn: number): { y: number; m: number; d: number } {
-  let l = jdn + 68569;
-  const n = Math.floor((4 * l) / 146097);
-  l = l - Math.floor((146097 * n + 3) / 4);
-  const i = Math.floor((4000 * (l + 1)) / 1461001);
-  l = l - Math.floor((1461 * i) / 4) + 31;
-  const j = Math.floor((80 * l) / 2447);
-  const d = l - Math.floor((2447 * j) / 80);
-  l = Math.floor(j / 11);
-  const m = j + 2 - 12 * l;
-  const y = 100 * (n - 49) + i + l;
-  return { y, m, d };
-}
-
-/** Hijri → Gregorian */
-function hijriToGregorian(hy: number, hm: number, hd: number) {
-  return jdnToGreg(hijriToJDN(hy, hm, hd));
-}
-
-/** Gregorian → Hijri (search-based, accurate to arithmetic calendar) */
-function gregorianToHijri(gy: number, gm: number, gd: number) {
-  const target = gregToJDN(gy, gm, gd);
-  let hy = Math.floor((target - 1948440) / 354.367);
-  while (hijriToJDN(hy + 1, 1, 1) <= target) hy++;
-  while (hijriToJDN(hy, 1, 1) > target) hy--;
-  let hm = 1;
-  while (hm < 12 && hijriToJDN(hy, hm + 1, 1) <= target) hm++;
-  const hd = target - hijriToJDN(hy, hm, 1) + 1;
-  return { y: hy, m: hm, d: hd };
-}
-
-// ─── Today's Hijri day in the hardcoded Dzulhijjah 1447 calendar ─────────────
-// Reference: 1 Dzulhijjah 1447 H ≈ 18 Mei 2026 (hardcoded approximation)
-const DZULHIJJAH_START_MS = new Date(2026, 4, 18, 0, 0, 0, 0).getTime();
-
+/** Get today's Hijri day of month (e.g., 10 for 10 Dzulhijjah) */
 function computeTodayHijriDay(): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const diff = Math.floor((today.getTime() - DZULHIJJAH_START_MS) / 86400000);
-  return diff >= 0 && diff < 30 ? diff + 1 : 1;
+  const now = new Date();
+  const today = gregorianToHijri(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  return today.d;
 }
 
-// ─── Calendar grid ────────────────────────────────────────────────────────────
-function buildCalendar(): DayCell[] {
+// Event labels for specific days (keyed by Hijri month-day)
+const HIJRI_EVENT_MARKERS: Record<string, { color: string; label: string }> = {
+  '1-1':   { color: Colors.ink3,  label: 'Tahun Baru Hijriah' },
+  '1-10':  { color: Colors.gold,  label: "Asyura" },
+  '3-12':  { color: Colors.primary, label: 'Maulid Nabi SAW' },
+  '7-27':  { color: Colors.primary, label: "Isra' Mi'raj" },
+  '8-15':  { color: Colors.ink3,  label: "Nisfu Sya'ban" },
+  '9-1':   { color: Colors.primary, label: 'Awal Ramadhan' },
+  '9-17':  { color: Colors.primary, label: 'Nuzulul Quran' },
+  '10-1':  { color: Colors.error, label: 'Idul Fitri' },
+  '12-8':  { color: Colors.gold,  label: 'Hari Tarwiyah' },
+  '12-9':  { color: Colors.gold,  label: 'Hari Arafah' },
+  '12-10': { color: Colors.error, label: 'Idul Adha' },
+  '12-11': { color: Colors.error, label: 'Hari Tasyrik' },
+  '12-12': { color: Colors.error, label: 'Hari Tasyrik' },
+  '12-13': { color: Colors.error, label: 'Hari Tasyrik' },
+};
+
+// ─── Hijri calendar grid (dynamic for any Hijri month/year) ──────────────
+function buildCalendar(hijriMonth: number, hijriYear: number): DayCell[] {
   const days: DayCell[] = [];
-  const events: Record<number, { color: string; label: string }> = {
-    1:  { color: Colors.ink3,  label: 'Awal bulan' },
-    8:  { color: Colors.gold,  label: 'Hari Tarwiyah' },
-    9:  { color: Colors.gold,  label: 'Hari Arafah' },
-    10: { color: Colors.error, label: 'Idul Adha' },
-    11: { color: Colors.error, label: 'Hari Tasyrik' },
-    12: { color: Colors.error, label: 'Hari Tasyrik' },
-    13: { color: Colors.error, label: 'Hari Tasyrik' },
-    15: { color: Colors.ink3,  label: 'Pertengahan bulan' },
-  };
-  // Padding: May 17 (Sunday) before Monday May 18
-  days.push({ hijriDay: 30, gregDay: 17, gregMonth: 'Mei', isOther: true });
-  for (let i = 1; i <= 30; i++) {
-    const gDay = 17 + i;
-    const gMonth = gDay > 31 ? 'Jun' : 'Mei';
-    const g = gDay > 31 ? gDay - 31 : gDay;
-    const ev = events[i];
+  const nowG = new Date();
+  const todayG = { y: nowG.getFullYear(), m: nowG.getMonth() + 1, d: nowG.getDate() };
+
+  // First day of this Hijri month as Gregorian
+  const firstOfMonth = hijriToGregorian(hijriYear, hijriMonth, 1);
+  const firstGregDate = new Date(firstOfMonth.y, firstOfMonth.m - 1, firstOfMonth.d);
+  const firstDayOfWeek = firstGregDate.getDay(); // 0=Sun
+
+  // Days in this Hijri month: use JDN difference (accurate for tabular calendar)
+  const nextHM = hijriMonth === 12 ? 1 : hijriMonth + 1;
+  const nextHY = hijriMonth === 12 ? hijriYear + 1 : hijriYear;
+  const daysInMonth = hijriToJDN(nextHY, nextHM, 1) - hijriToJDN(hijriYear, hijriMonth, 1);
+
+  // ── Leading padding (days from previous Hijri month) ─────────────────
+  const prevHM = hijriMonth === 1 ? 12 : hijriMonth - 1;
+  const prevHY = hijriMonth === 1 ? hijriYear - 1 : hijriYear;
+  const prevDays = hijriToJDN(hijriYear, hijriMonth, 1) - hijriToJDN(prevHY, prevHM, 1);
+  for (let i = firstDayOfWeek - 1; i >= 0; i--) {
+    const hd = prevDays - i;
+    const gd = new Date(firstGregDate);
+    gd.setDate(gd.getDate() - (firstDayOfWeek - i) + (firstDayOfWeek - i === 0 ? 0 : 0));
+    const gDate = new Date(firstGregDate.getTime() - (firstDayOfWeek - i) * 86400000);
     days.push({
-      hijriDay: i, gregDay: g, gregMonth: gMonth, isOther: false,
-      hasEvent: !!ev, eventColor: ev?.color, eventLabel: ev?.label,
+      hijriDay: hd,
+      gregDay: gDate.getDate(),
+      gregMonth: GREG_MONTHS_SHORT[gDate.getMonth()],
+      isOther: true,
+      isActualToday: gDate.getFullYear() === todayG.y && gDate.getMonth() + 1 === todayG.m && gDate.getDate() === todayG.d,
     });
   }
-  while (days.length < 42) {
-    const n = days.length - 31;
-    days.push({ hijriDay: n, gregDay: n, gregMonth: 'Jun', isOther: true });
+
+  // ── Current month days ───────────────────────────────────────────────
+  for (let i = 1; i <= daysInMonth; i++) {
+    const gDate = new Date(firstGregDate.getTime() + (i - 1) * 86400000);
+    const evKey = `${hijriMonth}-${i}`;
+    const ev = HIJRI_EVENT_MARKERS[evKey];
+    days.push({
+      hijriDay: i,
+      gregDay: gDate.getDate(),
+      gregMonth: GREG_MONTHS_SHORT[gDate.getMonth()],
+      isOther: false,
+      isActualToday: gDate.getFullYear() === todayG.y && gDate.getMonth() + 1 === todayG.m && gDate.getDate() === todayG.d,
+      hasEvent: !!ev,
+      eventColor: ev?.color,
+      eventLabel: ev?.label,
+    });
   }
+
+  // ── Trailing padding (days from next Hijri month) ────────────────────
+  let trailing = 1;
+  while (days.length < 42) {
+    const gDate = new Date(firstGregDate.getTime() + (daysInMonth - 1 + trailing) * 86400000);
+    days.push({
+      hijriDay: trailing,
+      gregDay: gDate.getDate(),
+      gregMonth: GREG_MONTHS_SHORT[gDate.getMonth()],
+      isOther: true,
+      isActualToday: gDate.getFullYear() === todayG.y && gDate.getMonth() + 1 === todayG.m && gDate.getDate() === todayG.d,
+    });
+    trailing++;
+  }
+
   return days;
 }
 
-// ─── Important dates for 1447 H ──────────────────────────────────────────────
-const PENTING_DATES = Object.values(HIJRI_EVENTS)
-  .flat()
-  .sort((a, b) => a.month !== b.month ? a.month - b.month : a.day - b.day)
-  .map(ev => {
-    const g = hijriToGregorian(1447, ev.month, ev.day);
-    const icon = ev.month === 9 ? '🌙'
-      : ev.month === 10 ? '🎉'
-      : ev.month === 12 && ev.day === 10 ? '🐑'
-      : ev.month === 12 && ev.day >= 11 ? '📿'
-      : ev.day === 1 && ev.month === 1 ? '🎊'
-      : '📅';
-    return {
-      hijri: `${ev.day} ${HIJRI_MONTHS[ev.month]} 1447 H`,
-      greg: `${g.d} ${GREG_MONTHS_SHORT[g.m - 1]} ${g.y}`,
-      label: ev.label,
-      desc: ev.desc,
-      icon,
-    };
-  });
+// ─── Gregorian (Masehi) calendar grid ────────────────────────────────────
+function buildMasehiCalendar(gregMonth: number, gregYear: number): DayCell[] {
+  const days: DayCell[] = [];
+  const nowG = new Date();
+  const todayG = { y: nowG.getFullYear(), m: nowG.getMonth() + 1, d: nowG.getDate() };
+
+  const firstDate = new Date(gregYear, gregMonth - 1, 1);
+  const firstDayOfWeek = firstDate.getDay();
+  const daysInMonth = new Date(gregYear, gregMonth, 0).getDate(); // last day of month
+
+  // Leading padding
+  for (let i = firstDayOfWeek - 1; i >= 0; i--) {
+    const gDate = new Date(firstDate.getTime() - (firstDayOfWeek - i) * 86400000);
+    const h = gregorianToHijri(gDate.getFullYear(), gDate.getMonth() + 1, gDate.getDate());
+    const evKey = `${h.m}-${h.d}`;
+    const ev = HIJRI_EVENT_MARKERS[evKey];
+    days.push({
+      hijriDay: h.d,
+      gregDay: gDate.getDate(),
+      gregMonth: GREG_MONTHS_SHORT[gDate.getMonth()],
+      isOther: true,
+      isActualToday: gDate.getFullYear() === todayG.y && gDate.getMonth() + 1 === todayG.m && gDate.getDate() === todayG.d,
+      hasEvent: !!ev,
+      eventColor: ev?.color,
+      eventLabel: ev?.label,
+    });
+  }
+
+  // Current month
+  for (let i = 1; i <= daysInMonth; i++) {
+    const gDate = new Date(gregYear, gregMonth - 1, i);
+    const h = gregorianToHijri(gDate.getFullYear(), gDate.getMonth() + 1, gDate.getDate());
+    const evKey = `${h.m}-${h.d}`;
+    const ev = HIJRI_EVENT_MARKERS[evKey];
+    days.push({
+      hijriDay: h.d,
+      gregDay: i,
+      gregMonth: GREG_MONTHS_SHORT[gregMonth - 1],
+      isOther: false,
+      isActualToday: gDate.getFullYear() === todayG.y && gDate.getMonth() + 1 === todayG.m && gDate.getDate() === todayG.d,
+      hasEvent: !!ev,
+      eventColor: ev?.color,
+      eventLabel: ev?.label,
+    });
+  }
+
+  // Trailing padding
+  let trailing = 1;
+  while (days.length < 42) {
+    const gDate = new Date(gregYear, gregMonth - 1, daysInMonth + trailing);
+    const h = gregorianToHijri(gDate.getFullYear(), gDate.getMonth() + 1, gDate.getDate());
+    const evKey = `${h.m}-${h.d}`;
+    const ev = HIJRI_EVENT_MARKERS[evKey];
+    days.push({
+      hijriDay: h.d,
+      gregDay: gDate.getDate(),
+      gregMonth: GREG_MONTHS_SHORT[gDate.getMonth()],
+      isOther: true,
+      isActualToday: false,
+      hasEvent: !!ev,
+      eventColor: ev?.color,
+      eventLabel: ev?.label,
+    });
+    trailing++;
+  }
+
+  return days;
+}
+
+// ─── Important dates — computed per selected year ────────────────────────
+function computePentingDates(hijriYear: number) {
+  return Object.values(HIJRI_EVENTS)
+    .flat()
+    .sort((a, b) => a.month !== b.month ? a.month - b.month : a.day - b.day)
+    .map(ev => {
+      const g = hijriToGregorian(hijriYear, ev.month, ev.day);
+      const icon = ev.month === 9 ? '🌙'
+        : ev.month === 10 ? '🎉'
+        : ev.month === 12 && ev.day === 10 ? '🐑'
+        : ev.month === 12 && ev.day >= 11 ? '📿'
+        : ev.day === 1 && ev.month === 1 ? '🎊'
+        : '📅';
+      return {
+        hijri: `${ev.day} ${HIJRI_MONTHS[ev.month]} ${hijriYear} H`,
+        greg: `${g.d} ${GREG_MONTHS_SHORT[g.m - 1]} ${g.y}`,
+        label: ev.label,
+        desc: ev.desc,
+        icon,
+      };
+    });
+}
 
 // ─── Upcoming events ──────────────────────────────────────────────────────────
 const ALL_UPCOMING = [
@@ -164,9 +241,15 @@ export default function CalendarScreen() {
   const insets = useSafeAreaInsets();
   const todayHijriDay = computeTodayHijriDay();
 
+  const [calMode, setCalMode] = useState<'hijri' | 'masehi'>('hijri');
   const [selected, setSelected] = useState(todayHijriDay);
-  const [hijriMonth]  = useState(12);
-  const [hijriYear]   = useState(1447);
+  const [selectedHijriMonth, setSelectedHijriMonth] = useState(12);
+  const [selectedHijriYear, setSelectedHijriYear] = useState(1447);
+
+  // Masehi calendar state
+  const [selectedGregMonth, setSelectedGregMonth] = useState(() => new Date().getMonth() + 1);
+  const [selectedGregYear, setSelectedGregYear]   = useState(() => new Date().getFullYear());
+  const [selectedGregDay, setSelectedGregDay]     = useState(() => new Date().getDate());
 
   // Converter modal state
   const [converterVisible, setConverterVisible] = useState(false);
@@ -179,15 +262,49 @@ export default function CalendarScreen() {
   // Hari Penting modal state
   const [pentingVisible, setPentingVisible] = useState(false);
 
-  const days = buildCalendar();
-  const monthName = HIJRI_MONTHS[hijriMonth];
-  const selDay = days.find(d => d.hijriDay === selected && !d.isOther);
-  const upcoming = getUpcoming(todayHijriDay);
+  const isHijriMode = calMode === 'hijri';
+  const days = isHijriMode
+    ? buildCalendar(selectedHijriMonth, selectedHijriYear)
+    : buildMasehiCalendar(selectedGregMonth, selectedGregYear);
 
-  // Gregorian date string for selected Hijri day
-  const selGregDate = new Date(2026, 4, 17 + selected); // May 17 + selected = May 18 for day 1
-  const selDayName  = DAY_NAMES[selGregDate.getDay()];
-  const selGregStr  = `${selDayName} · ${selGregDate.getDate()} ${GREG_MONTHS_SHORT[selGregDate.getMonth()]} ${selGregDate.getFullYear()}`;
+  const monthHeaderName = isHijriMode
+    ? `${HIJRI_MONTHS[selectedHijriMonth]} ${selectedHijriYear} H`
+    : `${GREG_MONTHS_LONG[selectedGregMonth - 1]} ${selectedGregYear}`;
+
+  const monthSubName = isHijriMode
+    ? `Bulan ${selectedHijriMonth} / 12`
+    : `Bulan ${selectedGregMonth} / 12`;
+
+  // Find selected cell
+  const selDay = isHijriMode
+    ? days.find(d => !d.isOther && d.hijriDay === selected)
+    : days.find(d => !d.isOther && d.gregDay === selectedGregDay);
+
+  const upcoming = getUpcoming(todayHijriDay);
+  const pentingDates = computePentingDates(selectedHijriYear);
+
+  // Date strings for the "detail" section
+  let selHijriStr = '';
+  let selGregStr = '';
+  if (isHijriMode && selDay) {
+    const selGDate = new Date(
+      selDay.gregMonth
+        ? new Date(`${selDay.gregDay} ${selDay.gregMonth} 2026`).getFullYear()
+        : new Date().getFullYear(),
+      GREG_MONTHS_SHORT.indexOf(selDay.gregMonth),
+      selDay.gregDay,
+    );
+    // More reliable: compute from Hijri
+    const gFull = hijriToGregorian(selectedHijriYear, selectedHijriMonth, selected);
+    const gDate = new Date(gFull.y, gFull.m - 1, gFull.d);
+    selGregStr = `${DAY_NAMES[gDate.getDay()]} · ${gDate.getDate()} ${GREG_MONTHS_SHORT[gDate.getMonth()]} ${gDate.getFullYear()}`;
+    selHijriStr = `${selected} ${HIJRI_MONTHS[selectedHijriMonth]} ${selectedHijriYear} H`;
+  } else if (!isHijriMode && selDay) {
+    const gDate = new Date(selectedGregYear, selectedGregMonth - 1, selectedGregDay);
+    const h = gregorianToHijri(selectedGregYear, selectedGregMonth, selectedGregDay);
+    selGregStr = `${DAY_NAMES[gDate.getDay()]} · ${selectedGregDay} ${GREG_MONTHS_SHORT[selectedGregMonth - 1]} ${selectedGregYear}`;
+    selHijriStr = `${h.d} ${HIJRI_MONTHS[h.m]} ${h.y} H`;
+  }
 
   function handleConvert() {
     const d = parseInt(convD, 10);
@@ -221,32 +338,100 @@ export default function CalendarScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.iconBtn}>
           <Ionicons name="chevron-back" size={22} color={Colors.ink} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Kalender Hijriah</Text>
+        <Text style={s.headerTitle}>Kalender {isHijriMode ? 'Hijriah' : 'Masehi'}</Text>
         <TouchableOpacity style={s.iconBtn} onPress={() => router.navigate('/(tabs)/menu' as any)}>
           <Ionicons name="settings-outline" size={20} color={Colors.ink2} />
         </TouchableOpacity>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Mode toggle */}
+        <View style={s.modeToggleRow}>
+          <TouchableOpacity
+            style={[s.modeBtn, isHijriMode && s.modeBtnActive]}
+            onPress={() => setCalMode('hijri')}
+          >
+            <Text style={[s.modeBtnText, isHijriMode && s.modeBtnTextActive]}>Hijriah</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.modeBtn, !isHijriMode && s.modeBtnActive]}
+            onPress={() => setCalMode('masehi')}
+          >
+            <Text style={[s.modeBtnText, !isHijriMode && s.modeBtnTextActive]}>Masehi</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Month header */}
         <View style={s.monthHeader}>
           <View>
-            <Text style={s.monthTitle}>
-              {monthName} <Text style={{ color: Colors.primary }}>{hijriYear} H</Text>
-            </Text>
-            <Text style={s.monthSub}>18 Mei – 16 Juni 2026</Text>
+            <Text style={s.monthTitle}>{monthHeaderName}</Text>
+            <Text style={s.monthSub}>{monthSubName}</Text>
           </View>
           <View style={s.monthNav}>
-            <TouchableOpacity style={s.navBtn}>
+            <TouchableOpacity
+              style={s.navBtn}
+              onPress={() => {
+                if (isHijriMode) {
+                  if (selectedHijriMonth === 1) {
+                    setSelectedHijriMonth(12);
+                    setSelectedHijriYear(y => y - 1);
+                  } else {
+                    setSelectedHijriMonth(m => m - 1);
+                  }
+                  setSelected(1);
+                } else {
+                  if (selectedGregMonth === 1) {
+                    setSelectedGregMonth(12);
+                    setSelectedGregYear(y => y - 1);
+                  } else {
+                    setSelectedGregMonth(m => m - 1);
+                  }
+                  setSelectedGregDay(1);
+                }
+              }}
+            >
               <Ionicons name="chevron-back" size={18} color={Colors.ink2} />
             </TouchableOpacity>
             <TouchableOpacity
               style={s.todayBtn}
-              onPress={() => setSelected(todayHijriDay)}
+              onPress={() => {
+                const now = new Date();
+                if (isHijriMode) {
+                  const today = gregorianToHijri(now.getFullYear(), now.getMonth() + 1, now.getDate());
+                  setSelectedHijriMonth(today.m);
+                  setSelectedHijriYear(today.y);
+                  setSelected(today.d);
+                } else {
+                  setSelectedGregMonth(now.getMonth() + 1);
+                  setSelectedGregYear(now.getFullYear());
+                  setSelectedGregDay(now.getDate());
+                }
+              }}
             >
               <Text style={s.todayBtnText}>Hari ini</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={s.navBtn}>
+            <TouchableOpacity
+              style={s.navBtn}
+              onPress={() => {
+                if (isHijriMode) {
+                  if (selectedHijriMonth === 12) {
+                    setSelectedHijriMonth(1);
+                    setSelectedHijriYear(y => y + 1);
+                  } else {
+                    setSelectedHijriMonth(m => m + 1);
+                  }
+                  setSelected(1);
+                } else {
+                  if (selectedGregMonth === 12) {
+                    setSelectedGregMonth(1);
+                    setSelectedGregYear(y => y + 1);
+                  } else {
+                    setSelectedGregMonth(m => m + 1);
+                  }
+                  setSelectedGregDay(1);
+                }
+              }}
+            >
               <Ionicons name="chevron-forward" size={18} color={Colors.ink2} />
             </TouchableOpacity>
           </View>
@@ -262,8 +447,12 @@ export default function CalendarScreen() {
         {/* Grid */}
         <View style={s.grid}>
           {days.map((d, i) => {
-            const isSel   = !d.isOther && d.hijriDay === selected;
-            const isToday = !d.isOther && d.hijriDay === todayHijriDay;
+            const isSel = isHijriMode
+              ? (!d.isOther && d.hijriDay === selected)
+              : (!d.isOther && d.gregDay === selectedGregDay);
+            const isToday = !!d.isActualToday;
+            const bigNum   = isHijriMode ? d.hijriDay : d.gregDay;
+            const smallNum = isHijriMode ? d.gregDay  : d.hijriDay;
             return (
               <TouchableOpacity
                 key={i}
@@ -272,7 +461,14 @@ export default function CalendarScreen() {
                   isSel && s.dayCellSelected,
                   isToday && !isSel && s.dayCellToday,
                 ]}
-                onPress={() => !d.isOther && setSelected(d.hijriDay)}
+                onPress={() => {
+                  if (d.isOther) return;
+                  if (isHijriMode) {
+                    setSelected(d.hijriDay);
+                  } else {
+                    setSelectedGregDay(d.gregDay);
+                  }
+                }}
                 disabled={d.isOther}
               >
                 <Text style={[
@@ -281,14 +477,14 @@ export default function CalendarScreen() {
                   isToday && !isSel && { fontWeight: '700' },
                   d.isOther && s.dayOther,
                 ]}>
-                  {d.hijriDay}
+                  {bigNum}
                 </Text>
                 <Text style={[
                   s.dayGreg,
                   isSel && { color: 'rgba(255,255,255,0.7)' },
                   d.isOther && { opacity: 0.4 },
                 ]}>
-                  {d.gregDay}
+                  {smallNum}
                 </Text>
                 {d.hasEvent && (
                   <View style={[s.eventDot, { backgroundColor: isSel ? Colors.gold : d.eventColor }]} />
@@ -306,8 +502,8 @@ export default function CalendarScreen() {
           <Card pad={18} radius={Radius.xl}>
             <View style={s.detailTop}>
               <View>
-                <Text style={s.detailHijri}>{selected} {monthName} {hijriYear} H</Text>
-                <Text style={s.detailGreg}>{selGregStr}</Text>
+                <Text style={s.detailHijri}>{selHijriStr || '—'}</Text>
+                <Text style={s.detailGreg}>{selGregStr || '—'}</Text>
               </View>
               {selDay?.hasEvent && (
                 <View style={s.eventBadge}>
@@ -365,7 +561,7 @@ export default function CalendarScreen() {
             <Card pad={14} radius={16} style={{ flex: 1 }}>
               <Ionicons name="star-outline" size={18} color={Colors.gold} />
               <Text style={s.toolTitle}>Hari Penting</Text>
-              <Text style={s.toolSub}>{PENTING_DATES.length} event tahunan</Text>
+              <Text style={s.toolSub}>{pentingDates.length} event tahunan</Text>
             </Card>
           </TouchableOpacity>
         </View>
@@ -375,73 +571,89 @@ export default function CalendarScreen() {
 
       {/* ── Converter Modal ──────────────────────────────────────────────────── */}
       <Modal visible={converterVisible} transparent animationType="slide" onRequestClose={() => setConverterVisible(false)}>
-        <TouchableOpacity style={cm.overlay} activeOpacity={1} onPress={() => setConverterVisible(false)}>
-          <TouchableOpacity style={cm.sheet} activeOpacity={1}>
+        {/*
+          KAV must be the OUTERMOST container so it wraps both the dismiss area
+          and the sheet. behavior="padding" adds paddingBottom = keyboard height,
+          which pushes the sheet up. TouchableOpacity (flex:1) absorbs the space.
+        */}
+        <KeyboardAvoidingView
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }}
+          behavior="padding"
+        >
+          {/* Tap dim area to dismiss */}
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setConverterVisible(false)} />
+          {/* Sheet sits at the bottom of KAV; KAV padding pushes it above keyboard */}
+          <View style={cm.sheet}>
             <View style={cm.handle} />
-            <View style={cm.modalHeader}>
-              <Text style={cm.modalTitle}>Konverter Tanggal</Text>
-              <TouchableOpacity onPress={() => setConverterVisible(false)}>
-                <Ionicons name="close" size={22} color={Colors.ink} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Mode tabs */}
-            <View style={cm.tabs}>
-              {(['g2h', 'h2g'] as const).map(mode => (
-                <TouchableOpacity
-                  key={mode}
-                  style={[cm.tab, convMode === mode && cm.tabActive]}
-                  onPress={() => { setConvMode(mode); setConvResult(''); }}
-                >
-                  <Text style={[cm.tabText, convMode === mode && cm.tabTextActive]}>
-                    {mode === 'g2h' ? 'Masehi → Hijriah' : 'Hijriah → Masehi'}
-                  </Text>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <View style={cm.modalHeader}>
+                <Text style={cm.modalTitle}>Konverter Tanggal</Text>
+                <TouchableOpacity onPress={() => setConverterVisible(false)}>
+                  <Ionicons name="close" size={22} color={Colors.ink} />
                 </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={cm.inputLabel}>
-              {convMode === 'g2h' ? 'Masukkan tanggal Masehi' : 'Masukkan tanggal Hijriah'}
-            </Text>
-            <View style={cm.inputRow}>
-              <View style={cm.inputWrap}>
-                <Text style={cm.inputHint}>Hari</Text>
-                <TextInput style={cm.input} value={convD} onChangeText={setConvD}
-                  keyboardType="numeric" maxLength={2} placeholder="DD" placeholderTextColor={Colors.ink3} />
               </View>
-              <View style={cm.inputWrap}>
-                <Text style={cm.inputHint}>Bulan</Text>
-                <TextInput style={cm.input} value={convM} onChangeText={setConvM}
-                  keyboardType="numeric" maxLength={2} placeholder="MM" placeholderTextColor={Colors.ink3} />
-              </View>
-              <View style={[cm.inputWrap, { flex: 1.5 }]}>
-                <Text style={cm.inputHint}>Tahun</Text>
-                <TextInput style={cm.input} value={convY} onChangeText={setConvY}
-                  keyboardType="numeric" maxLength={4} placeholder="YYYY" placeholderTextColor={Colors.ink3} />
-              </View>
-            </View>
 
-            <TouchableOpacity style={cm.convertBtn} onPress={handleConvert}>
-              <Text style={cm.convertBtnText}>Konversi</Text>
-            </TouchableOpacity>
-
-            {convResult ? (
-              <View style={cm.resultBox}>
-                <Text style={cm.resultLabel}>Hasil:</Text>
-                <Text style={cm.resultText}>{convResult}</Text>
-                <Text style={cm.resultNote}>* Kalender aritmetika (±1-2 hari dari observasi)</Text>
+              {/* Mode tabs */}
+              <View style={cm.tabs}>
+                {(['g2h', 'h2g'] as const).map(mode => (
+                  <TouchableOpacity
+                    key={mode}
+                    style={[cm.tab, convMode === mode && cm.tabActive]}
+                    onPress={() => { setConvMode(mode); setConvResult(''); }}
+                  >
+                    <Text style={[cm.tabText, convMode === mode && cm.tabTextActive]}>
+                      {mode === 'g2h' ? 'Masehi → Hijriah' : 'Hijriah → Masehi'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
-            ) : null}
 
-            <View style={{ height: insets.bottom + 8 }} />
-          </TouchableOpacity>
-        </TouchableOpacity>
+              <Text style={cm.inputLabel}>
+                {convMode === 'g2h' ? 'Masukkan tanggal Masehi' : 'Masukkan tanggal Hijriah'}
+              </Text>
+              <View style={cm.inputRow}>
+                <View style={cm.inputWrap}>
+                  <Text style={cm.inputHint}>Hari</Text>
+                  <TextInput style={cm.input} value={convD} onChangeText={setConvD}
+                    keyboardType="numeric" maxLength={2} placeholder="DD" placeholderTextColor={Colors.ink3} />
+                </View>
+                <View style={cm.inputWrap}>
+                  <Text style={cm.inputHint}>Bulan</Text>
+                  <TextInput style={cm.input} value={convM} onChangeText={setConvM}
+                    keyboardType="numeric" maxLength={2} placeholder="MM" placeholderTextColor={Colors.ink3} />
+                </View>
+                <View style={[cm.inputWrap, { flex: 1.5 }]}>
+                  <Text style={cm.inputHint}>Tahun</Text>
+                  <TextInput style={cm.input} value={convY} onChangeText={setConvY}
+                    keyboardType="numeric" maxLength={4} placeholder="YYYY" placeholderTextColor={Colors.ink3} />
+                </View>
+              </View>
+
+              <TouchableOpacity style={cm.convertBtn} onPress={handleConvert}>
+                <Text style={cm.convertBtnText}>Konversi</Text>
+              </TouchableOpacity>
+
+              {convResult ? (
+                <View style={cm.resultBox}>
+                  <Text style={cm.resultLabel}>Hasil:</Text>
+                  <Text style={cm.resultText}>{convResult}</Text>
+                  <Text style={cm.resultNote}>* Kalender aritmetika (±1-2 hari dari observasi)</Text>
+                </View>
+              ) : null}
+
+              <View style={{ height: insets.bottom + 8 }} />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ── Hari Penting Modal ───────────────────────────────────────────────── */}
       <Modal visible={pentingVisible} transparent animationType="slide" onRequestClose={() => setPentingVisible(false)}>
-        <TouchableOpacity style={cm.overlay} activeOpacity={1} onPress={() => setPentingVisible(false)}>
-          <TouchableOpacity style={[cm.sheet, { maxHeight: '85%' }]} activeOpacity={1}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }}>
+          {/* Tap dim area to dismiss */}
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setPentingVisible(false)} />
+          {/* Plain View — NOT TouchableOpacity — so ScrollView inside can receive scroll gestures */}
+          <View style={[cm.sheet, { maxHeight: '85%' }]}>
             <View style={cm.handle} />
             <View style={cm.modalHeader}>
               <Text style={cm.modalTitle}>Hari Penting 1447 H</Text>
@@ -451,7 +663,7 @@ export default function CalendarScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              {PENTING_DATES.map((item, i) => (
+              {pentingDates.map((item, i) => (
                 <View key={i} style={cm.eventItem}>
                   <Text style={cm.eventIcon}>{item.icon}</Text>
                   <View style={{ flex: 1 }}>
@@ -468,8 +680,8 @@ export default function CalendarScreen() {
               </Text>
               <View style={{ height: insets.bottom + 16 }} />
             </ScrollView>
-          </TouchableOpacity>
-        </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -489,6 +701,22 @@ const s = StyleSheet.create({
     backgroundColor: Colors.chip, alignItems: 'center', justifyContent: 'center',
   },
   px: { paddingHorizontal: 16 },
+
+  modeToggleRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4,
+  },
+  modeBtn: {
+    flex: 1, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: Colors.chip,
+    borderWidth: 1, borderColor: 'transparent',
+  },
+  modeBtnActive: {
+    backgroundColor: Colors.primary,
+  },
+  modeBtnText: { fontSize: 13.5, fontWeight: '600', color: Colors.ink2 },
+  modeBtnTextActive: { color: '#fff' },
 
   monthHeader: {
     flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',

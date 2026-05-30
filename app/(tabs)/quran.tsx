@@ -92,6 +92,31 @@ export default function QuranScreen() {
           </LinearGradient>
         </View>
 
+        {/* ── Tanya Quran feature card ── */}
+        <TouchableOpacity
+          style={s.tanyaCard}
+          onPress={() => router.push('/tanya-quran')}
+          activeOpacity={0.82}
+        >
+          <LinearGradient
+            colors={['#1A4D38', '#2D7A5E']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={s.tanyaGradient}
+          >
+            <View style={s.tanyaLeft}>
+              <View style={s.tanyaIconWrap}>
+                <Text style={{ fontSize: 22 }}>✨</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.tanyaTitle}>Tanya Quran</Text>
+                <Text style={s.tanyaSub}>Cari ayat berdasarkan makna dengan AI</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
+          </LinearGradient>
+        </TouchableOpacity>
+
         {/* Search */}
         <View style={s.searchBox}>
           <Ionicons name="search-outline" size={16} color={Colors.ink3} />
@@ -198,6 +223,44 @@ const s = StyleSheet.create({
   progFill: { height: '100%', backgroundColor: Colors.gold, borderRadius: 3 },
   continueBtn: { padding: 10, paddingHorizontal: 14, borderRadius: 14, backgroundColor: Colors.gold },
   continueBtnText: { fontSize: 12.5, fontWeight: '700', color: Colors.primaryDeep },
+
+  tanyaCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  tanyaGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    gap: 12,
+  },
+  tanyaLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  tanyaIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tanyaTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  tanyaSub: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 1,
+  },
 
   searchBox: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
